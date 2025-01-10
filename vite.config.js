@@ -6,7 +6,7 @@ import vueDevTools from 'vite-plugin-vue-devtools'
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: '/diplom/', // Укажите имя репозитория вместо "diplom"
+  base: '/diplom/',
   plugins: [
     vue(),
     vueDevTools(),
