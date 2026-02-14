@@ -40,9 +40,19 @@
 </template>
 
 <script>
+import { getUserCollection, addToUserCollection, updateInUserCollection } from '../db';
+
 const STORAGE_KEY = 'pitomec-recommendations';
 
+const DEFAULT_RECOMMENDATIONS = [
+  { title: "Ежедневный уход за шерстью", description: "Расчёсывайте шерсть каждый день для здоровья кожи.", category: "Уход", completed: false },
+  { title: "Режим питания", description: "Кормите 3 раза в день по 200 грамм.", category: "Питание", completed: false },
+  { title: "Утренние пробежки", description: "Делайте утренние пробежки по 30 минут.", category: "Тренировки", completed: false },
+  { title: "Осмотр у ветеринара", description: "Посетите ветеринара для ежемесячной профилактики.", category: "Здоровье", completed: false },
+];
+
 export default {
+  inject: ['getCurrentUser'],
   data() {
     return {
       selectedCategory: "",
@@ -53,32 +63,60 @@ export default {
         { value: "Здоровье", label: "Здоровье", icon: "🏥" },
         { value: "Тренировки", label: "Тренировки", icon: "🏃" },
       ],
-      recommendations: [
-        { id: 1, title: "Ежедневный уход за шерстью", description: "Расчёсывайте шерсть каждый день для здоровья кожи.", category: "Уход", completed: false },
-        { id: 2, title: "Режим питания", description: "Кормите 3 раза в день по 200 грамм.", category: "Питание", completed: false },
-        { id: 3, title: "Утренние пробежки", description: "Делайте утренние пробежки по 30 минут.", category: "Тренировки", completed: false },
-        { id: 4, title: "Осмотр у ветеринара", description: "Посетите ветеринара для ежемесячной профилактики.", category: "Здоровье", completed: false },
-      ],
+      recommendations: [],
     };
   },
   computed: {
+    userId() {
+      const user = this.getCurrentUser();
+      return user ? user.uid : null;
+    },
     filteredRecommendations() {
       if (this.selectedCategory) return this.recommendations.filter(r => r.category === this.selectedCategory);
       return this.recommendations;
     },
   },
   methods: {
-    toggleCompleted(id) {
+    async toggleCompleted(id) {
       const rec = this.recommendations.find(r => r.id === id);
-      if (rec) { rec.completed = !rec.completed; this.saveRecommendations(); }
+      if (rec) {
+        rec.completed = !rec.completed;
+        if (this.userId) {
+          await updateInUserCollection(this.userId, 'recommendations', id, { completed: rec.completed });
+        } else {
+          this.saveToLocalStorage();
+        }
+      }
     },
-    saveRecommendations() { localStorage.setItem(STORAGE_KEY, JSON.stringify(this.recommendations)); },
-    loadRecommendations() {
-      const d = localStorage.getItem(STORAGE_KEY);
-      if (d) try { this.recommendations = JSON.parse(d); } catch(e) { /* defaults */ }
+    saveToLocalStorage() { localStorage.setItem(STORAGE_KEY, JSON.stringify(this.recommendations)); },
+    async loadRecommendations() {
+      if (this.userId) {
+        try {
+          let data = await getUserCollection(this.userId, 'recommendations');
+          if (data.length === 0) {
+            // Первый запуск — добавляем рекомендации по умолчанию
+            for (const rec of DEFAULT_RECOMMENDATIONS) {
+              const id = await addToUserCollection(this.userId, 'recommendations', rec);
+              data.push({ ...rec, id });
+            }
+          }
+          this.recommendations = data;
+        } catch (e) {
+          console.error('Ошибка загрузки рекомендаций:', e);
+          this.recommendations = DEFAULT_RECOMMENDATIONS.map((r, i) => ({ ...r, id: String(i + 1) }));
+        }
+      } else {
+        const d = localStorage.getItem(STORAGE_KEY);
+        if (d) {
+          try { this.recommendations = JSON.parse(d); } catch(e) { /* defaults */ }
+        }
+        if (this.recommendations.length === 0) {
+          this.recommendations = DEFAULT_RECOMMENDATIONS.map((r, i) => ({ ...r, id: String(i + 1) }));
+        }
+      }
     },
   },
-  mounted() { this.loadRecommendations(); },
+  async mounted() { await this.loadRecommendations(); },
 };
 </script>
 

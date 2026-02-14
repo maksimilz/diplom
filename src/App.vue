@@ -4,22 +4,31 @@
     <header class="header">
       <div class="header-inner">
         <router-link to="/" class="logo">
-          <span class="logo-icon">🐾</span>
+          <IconLogo class="logo-icon" />
           <span class="logo-text">Питомец Плюс</span>
         </router-link>
 
         <!-- Мобильное меню кнопка -->
         <button class="mobile-toggle" @click="mobileMenuOpen = !mobileMenuOpen" aria-label="Меню">
-          <span :class="['hamburger', { open: mobileMenuOpen }]">
-            <span></span><span></span><span></span>
-          </span>
+          <IconMenu :class="['hamburger-icon', { open: mobileMenuOpen }]" />
         </button>
 
         <nav class="nav" :class="{ 'nav--open': mobileMenuOpen }">
-          <router-link to="/" class="nav-link" @click="closeMenu">Главная</router-link>
-          <router-link to="/about" class="nav-link" @click="closeMenu">О нас</router-link>
-          <router-link to="/contacts" class="nav-link" @click="closeMenu">Контакты</router-link>
-          <router-link to="/register" class="nav-link" @click="closeMenu">Вход</router-link>
+          <router-link to="/" class="nav-link" @click="closeMenu">
+            <IconHome /> Главная
+          </router-link>
+          <router-link to="/about" class="nav-link" @click="closeMenu">
+            <IconAbout /> О нас
+          </router-link>
+          <router-link to="/contacts" class="nav-link" @click="closeMenu">
+            <IconContacts /> Контакты
+          </router-link>
+          <router-link v-if="!currentUser" to="/register" class="nav-link" @click="closeMenu">
+            <IconUser /> Вход
+          </router-link>
+          <button v-else class="nav-link" @click="handleLogout">
+            <IconUser /> Выйти
+          </button>
           <!-- Dropdown -->
           <div
             class="dropdown"
@@ -28,20 +37,18 @@
           >
             <button class="nav-link dropdown-trigger" @click="showDropdown = !showDropdown">
               Функции
-              <svg class="dropdown-arrow" :class="{ rotated: showDropdown }" width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path d="M3 5L6 8L9 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
+              <IconChevronDown class="dropdown-arrow" :class="{ rotated: showDropdown }" />
             </button>
             <transition name="dropdown">
               <div v-show="showDropdown" class="dropdown-menu">
                 <router-link to="/tasks" class="dropdown-item" @click="closeMenu">
-                  <span class="dropdown-icon">📋</span> Задачи
+                  <IconTasks class="dropdown-icon" /> Задачи
                 </router-link>
                 <router-link to="/pet-diary" class="dropdown-item" @click="closeMenu">
-                  <span class="dropdown-icon">📓</span> Дневник питомца
+                  <IconDiary class="dropdown-icon" /> Дневник питомца
                 </router-link>
                 <router-link to="/recommendations" class="dropdown-item" @click="closeMenu">
-                  <span class="dropdown-icon">💡</span> Рекомендации
+                  <IconRecommendations class="dropdown-icon" /> Рекомендации
                 </router-link>
               </div>
             </transition>
@@ -75,17 +82,60 @@
 
 <script>
 import './assets/styles.css';
+import IconLogo from './components/icons/IconLogo.vue';
+import IconHome from './components/icons/IconHome.vue';
+import IconTasks from './components/icons/IconTasks.vue';
+import IconDiary from './components/icons/IconDiary.vue';
+import IconRecommendations from './components/icons/IconRecommendations.vue';
+import IconAbout from './components/icons/IconAbout.vue';
+import IconContacts from './components/icons/IconContacts.vue';
+import IconUser from './components/icons/IconUser.vue';
+import IconMenu from './components/icons/IconMenu.vue';
+import IconChevronDown from './components/icons/IconChevronDown.vue';
+import { onAuthChange, logoutUser } from './auth';
+
 export default {
+  components: {
+    IconLogo,
+    IconHome,
+    IconTasks,
+    IconDiary,
+    IconRecommendations,
+    IconAbout,
+    IconContacts,
+    IconUser,
+    IconMenu,
+    IconChevronDown
+  },
   data() {
     return {
       showDropdown: false,
       mobileMenuOpen: false,
+      currentUser: null,
     };
+  },
+  provide() {
+    return {
+      getCurrentUser: () => this.currentUser,
+    };
+  },
+  mounted() {
+    this._unsubAuth = onAuthChange((user) => {
+      this.currentUser = user;
+    });
+  },
+  beforeUnmount() {
+    if (this._unsubAuth) this._unsubAuth();
   },
   methods: {
     closeMenu() {
       this.mobileMenuOpen = false;
       this.showDropdown = false;
+    },
+    async handleLogout() {
+      await logoutUser();
+      this.closeMenu();
+      this.$router.push('/');
     },
   },
 };
@@ -130,7 +180,9 @@ export default {
 }
 
 .logo-icon {
-  font-size: 26px;
+  width: 28px;
+  height: 28px;
+  color: white;
 }
 
 /* Nav */
@@ -174,29 +226,16 @@ export default {
   box-shadow: none;
 }
 
-.hamburger {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
+/* Hamburger (IconMenu) */
+.hamburger-icon {
   width: 24px;
+  height: 24px;
+  color: white;
+  transition: transform 0.3s;
 }
 
-.hamburger span {
-  display: block;
-  height: 2px;
-  background: white;
-  border-radius: 2px;
-  transition: all 0.3s;
-}
-
-.hamburger.open span:nth-child(1) {
-  transform: rotate(45deg) translate(5px, 5px);
-}
-.hamburger.open span:nth-child(2) {
-  opacity: 0;
-}
-.hamburger.open span:nth-child(3) {
-  transform: rotate(-45deg) translate(5px, -5px);
+.hamburger-icon.open {
+  transform: rotate(90deg);
 }
 
 /* ========================================
@@ -255,7 +294,9 @@ export default {
 }
 
 .dropdown-icon {
-  font-size: 18px;
+  width: 20px;
+  height: 20px;
+  color: var(--primary);
 }
 
 /* Dropdown transition */

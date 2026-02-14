@@ -24,8 +24,9 @@
           <label for="confirm-password">Подтвердите пароль</label>
           <input id="confirm-password" v-model="form.confirmPassword" type="password" placeholder="••••••••" required />
         </div>
-        <button type="submit" class="btn-auth">
-          {{ isRegistering ? "Зарегистрироваться" : "Войти" }}
+        <p v-if="errorMessage" class="auth-error">{{ errorMessage }}</p>
+        <button type="submit" class="btn-auth" :disabled="loading">
+          {{ loading ? 'Подождите...' : (isRegistering ? 'Зарегистрироваться' : 'Войти') }}
         </button>
       </form>
 
@@ -40,21 +41,56 @@
 </template>
 
 <script>
+import { registerUser, loginUser } from '../auth';
+
 export default {
   data() {
     return {
       isRegistering: true,
       form: { username: "", email: "", password: "", confirmPassword: "" },
+      errorMessage: "",
+      loading: false,
     };
   },
   methods: {
-    toggleAuthMode() { this.isRegistering = !this.isRegistering; },
-    handleSubmit() {
+    toggleAuthMode() {
+      this.isRegistering = !this.isRegistering;
+      this.errorMessage = "";
+    },
+    async handleSubmit() {
+      this.errorMessage = "";
+
       if (this.isRegistering && this.form.password !== this.form.confirmPassword) {
-        alert("Пароли не совпадают!");
+        this.errorMessage = "Пароли не совпадают!";
         return;
       }
-      alert(this.isRegistering ? "Регистрация успешна!" : "Вход выполнен!");
+
+      if (this.form.password.length < 6) {
+        this.errorMessage = "Пароль должен быть не менее 6 символов";
+        return;
+      }
+
+      this.loading = true;
+      try {
+        if (this.isRegistering) {
+          await registerUser(this.form.email, this.form.password, this.form.username);
+        } else {
+          await loginUser(this.form.email, this.form.password);
+        }
+        this.$router.push('/');
+      } catch (e) {
+        const messages = {
+          'auth/email-already-in-use': 'Этот email уже зарегистрирован',
+          'auth/invalid-email': 'Некорректный email',
+          'auth/weak-password': 'Слишком простой пароль',
+          'auth/user-not-found': 'Пользователь не найден',
+          'auth/wrong-password': 'Неверный пароль',
+          'auth/invalid-credential': 'Неверный email или пароль',
+        };
+        this.errorMessage = messages[e.code] || `Ошибка: ${e.message}`;
+      } finally {
+        this.loading = false;
+      }
     },
   },
 };
@@ -118,6 +154,20 @@ export default {
   font-size: 15px;
   font-weight: 600;
   margin-top: 8px;
+}
+
+.btn-auth:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.auth-error {
+  color: var(--danger);
+  font-size: 13px;
+  text-align: center;
+  padding: 8px 12px;
+  background: var(--danger-light);
+  border-radius: var(--radius);
 }
 
 .auth-toggle {

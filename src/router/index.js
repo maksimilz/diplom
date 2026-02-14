@@ -1,29 +1,26 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import Home from '../views/Home.vue';
-import About from '../views/About.vue';
-import Contacts from '../views/Contacts.vue';
-import Register from '../views/Register.vue';
-import PetDiary from "@/views/PetDiary.vue";
-import Recommendations from "@/views/Recommendations.vue";
-import Tasks from "@/views/Tasks.vue";
-import Privacy from "@/views/Privacy.vue";
-import Terms from "@/views/Terms.vue";
 
 const routes = [
     { path: '/', name: 'Home', component: Home },
-    { path: '/about', name: 'About', component: About },
-    { path: '/contacts', name: 'Contacts', component: Contacts },
-    { path: '/register', name: 'Register', component: Register },
-    { path: '/pet-diary', name: 'PetDiary', component: PetDiary },
-    { path: '/recommendations', name: 'Recommendations', component: Recommendations },
-    { path: '/tasks', name: 'Tasks', component: Tasks },
-    { path: '/privacy', name: 'Privacy', component: Privacy },
-    { path: '/terms', name: 'Terms', component: Terms },
+    { path: '/about', name: 'About', component: () => import('../views/About.vue') },
+    { path: '/contacts', name: 'Contacts', component: () => import('../views/Contacts.vue') },
+    { path: '/register', name: 'Register', component: () => import('../views/Register.vue') },
+    { path: '/pet-diary', name: 'PetDiary', component: () => import('../views/PetDiary.vue') },
+    { path: '/recommendations', name: 'Recommendations', component: () => import('../views/Recommendations.vue') },
+    { path: '/tasks', name: 'Tasks', component: () => import('../views/Tasks.vue') },
+    { path: '/privacy', name: 'Privacy', component: () => import('../views/Privacy.vue') },
+    { path: '/terms', name: 'Terms', component: () => import('../views/Terms.vue') },
+    { path: '/:pathMatch(.*)*', name: 'NotFound', component: () => import('../views/NotFound.vue') },
 ];
 
 const router = createRouter({
     history: createWebHistory('/diplom/'),
     routes,
+    scrollBehavior() {
+        return { top: 0 };
+    },
 });
 
 export default router;
+

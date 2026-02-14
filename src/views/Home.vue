@@ -2,19 +2,24 @@
   <div class="home">
     <!-- Hero секция -->
     <section class="hero">
-      <div class="hero-content">
-        <span class="hero-badge">🐾 Платформа для заботы о питомцах</span>
-        <h1 class="hero-title">
-          Всё для вашего<br>
-          <span class="gradient-text">питомца</span> в одном месте
-        </h1>
-        <p class="hero-desc">
-          Автоматизируйте заботу о питомцах: персонализированные рекомендации,
-          управление задачами и дневник здоровья.
-        </p>
-        <div class="hero-actions">
-          <router-link to="/register" class="btn-hero-primary">Начать бесплатно</router-link>
-          <router-link to="/about" class="btn-hero-secondary">Узнать больше →</router-link>
+      <div class="hero-container">
+        <div class="hero-content">
+          <span class="hero-badge">🐾 Платформа для заботы о питомцах</span>
+          <h1 class="hero-title">
+            Всё для вашего<br>
+            <span class="gradient-text">питомца</span> в одном месте
+          </h1>
+          <p class="hero-desc">
+            Автоматизируйте заботу о питомцах: персонализированные рекомендации,
+            управление задачами и дневник здоровья.
+          </p>
+          <div class="hero-actions">
+            <router-link to="/register" class="btn-hero-primary">Начать бесплатно</router-link>
+            <router-link to="/about" class="btn-hero-secondary">Узнать больше →</router-link>
+          </div>
+        </div>
+        <div class="hero-image-wrap">
+          <img :src="heroImg" alt="Счастливые питомцы" class="hero-img" />
         </div>
       </div>
     </section>
@@ -64,13 +69,15 @@
 </template>
 
 <script>
-import recommendationsImg from '@/assets/img/recommendations.png';
-import taskPlanningImg from '@/assets/img/Task planning.png';
-import profileMgmtImg from '@/assets/img/Profile Management.png';
+import heroImg from '@/assets/img/hero-illustration.svg';
+import recommendationsImg from '@/assets/img/feature-recommendations.png';
+import taskPlanningImg from '@/assets/img/feature-planning.png';
+import profileMgmtImg from '@/assets/img/feature-profile.png';
 
 export default {
   data() {
     return {
+      heroImg,
       email: "",
       features: [
         {
@@ -121,10 +128,10 @@ export default {
 <style scoped>
 /* Hero */
 .hero {
-  text-align: center;
-  padding: 60px 24px 50px;
+  padding: 80px 24px;
   background: linear-gradient(180deg, var(--primary-50) 0%, transparent 100%);
   border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+  overflow: hidden;
 }
 
 .hero-badge {
@@ -154,16 +161,45 @@ export default {
 }
 
 .hero-desc {
-  font-size: 17px;
+  font-size: 18px;
   color: var(--text-secondary);
-  max-width: 560px;
-  margin: 0 auto 28px;
-  line-height: 1.7;
+  max-width: 500px;
+  margin-bottom: 32px;
+  line-height: 1.6;
+}
+
+.hero-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  gap: 40px;
+  text-align: left;
+}
+
+.hero-image-wrap {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.hero-img {
+  max-width: 100%;
+  height: auto;
+  filter: drop-shadow(0 20px 40px rgba(0,0,0,0.1));
+  animation: float 6s ease-in-out infinite;
+}
+
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-15px); }
+  100% { transform: translateY(0px); }
 }
 
 .hero-actions {
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 14px;
   flex-wrap: wrap;
 }
@@ -420,9 +456,19 @@ export default {
     font-size: 15px;
   }
 
+  .hero-container {
+    grid-template-columns: 1fr;
+    text-align: center;
+    gap: 40px;
+  }
+
   .hero-actions {
-    flex-direction: column;
-    align-items: center;
+    justify-content: center;
+  }
+
+  .hero-desc {
+    margin-left: auto;
+    margin-right: auto;
   }
 
   .subscribe-form {

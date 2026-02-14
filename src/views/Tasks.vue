@@ -65,11 +65,13 @@
 <script>
 import FullCalendar from "@fullcalendar/vue3";
 import dayGridPlugin from "@fullcalendar/daygrid";
+import { getUserCollection, addToUserCollection, updateInUserCollection, deleteFromUserCollection } from '../db';
 
 const STORAGE_KEY = 'pitomec-tasks';
 
 export default {
   components: { FullCalendar },
+  inject: ['getCurrentUser'],
   data() {
     return {
       tasks: [],
@@ -78,6 +80,10 @@ export default {
     };
   },
   computed: {
+    userId() {
+      const user = this.getCurrentUser();
+      return user ? user.uid : null;
+    },
     calendarOptions() {
       return {
         plugins: [dayGridPlugin],
@@ -90,35 +96,64 @@ export default {
     },
   },
   methods: {
-    addTask() {
+    async addTask() {
+      const taskData = { title: this.newTask.title, date: this.newTask.date, recurrence: this.newTask.recurrence };
+
       if (this.editingId) {
         const i = this.tasks.findIndex(t => t.id === this.editingId);
-        if (i !== -1) this.tasks[i] = { ...this.newTask, id: this.editingId };
+        if (i !== -1) {
+          this.tasks[i] = { ...taskData, id: this.editingId };
+          if (this.userId) {
+            await updateInUserCollection(this.userId, 'tasks', this.editingId, taskData);
+          }
+        }
         this.editingId = null;
       } else {
-        this.tasks.push({ ...this.newTask, id: Date.now() });
+        if (this.userId) {
+          const id = await addToUserCollection(this.userId, 'tasks', taskData);
+          this.tasks.push({ ...taskData, id });
+        } else {
+          this.tasks.push({ ...taskData, id: String(Date.now()) });
+        }
       }
+
       this.resetForm();
-      this.saveTasks();
+      if (!this.userId) this.saveToLocalStorage();
     },
     resetForm() { this.newTask = { title: "", date: "", recurrence: "Нет" }; },
     editTask(id) {
       const t = this.tasks.find(t => t.id === id);
-      if (t) { this.newTask = { ...t }; this.editingId = id; }
+      if (t) { this.newTask = { title: t.title, date: t.date, recurrence: t.recurrence }; this.editingId = id; }
     },
     cancelEdit() { this.editingId = null; this.resetForm(); },
-    deleteTask(id) { this.tasks = this.tasks.filter(t => t.id !== id); this.saveTasks(); },
+    async deleteTask(id) {
+      this.tasks = this.tasks.filter(t => t.id !== id);
+      if (this.userId) {
+        await deleteFromUserCollection(this.userId, 'tasks', id);
+      } else {
+        this.saveToLocalStorage();
+      }
+    },
     formatDate(d) {
       if (!d) return '';
       return new Date(d).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     },
-    saveTasks() { localStorage.setItem(STORAGE_KEY, JSON.stringify(this.tasks)); },
-    loadTasks() {
-      const d = localStorage.getItem(STORAGE_KEY);
-      if (d) try { this.tasks = JSON.parse(d); } catch(e) { this.tasks = []; }
+    saveToLocalStorage() { localStorage.setItem(STORAGE_KEY, JSON.stringify(this.tasks)); },
+    async loadTasks() {
+      if (this.userId) {
+        try {
+          this.tasks = await getUserCollection(this.userId, 'tasks');
+        } catch (e) {
+          console.error('Ошибка загрузки задач:', e);
+          this.tasks = [];
+        }
+      } else {
+        const d = localStorage.getItem(STORAGE_KEY);
+        if (d) try { this.tasks = JSON.parse(d); } catch(e) { this.tasks = []; }
+      }
     },
   },
-  mounted() { this.loadTasks(); },
+  async mounted() { await this.loadTasks(); },
 };
 </script>
 

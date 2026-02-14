@@ -26,8 +26,8 @@
       </div>
 
       <p v-if="entries.length === 0" class="empty-state">
-        <span class="empty-icon">📝</span>
-        Записей пока нет. Добавьте первую!
+        <img :src="emptyDiaryImg" alt="Нет записей" class="empty-img" />
+        <span>Записей пока нет. Добавьте первую!</span>
       </p>
 
       <div class="entries-grid">
@@ -94,32 +94,64 @@
 
 <script>
 import Chart from 'chart.js/auto';
+import { markRaw } from 'vue';
+import emptyDiaryImg from '@/assets/img/empty-diary.svg';
+import { getUserCollection, addToUserCollection, deleteFromUserCollection } from '../db';
 
 const STORAGE_KEY = 'pitomec-diary';
 const HEALTH_MAP = { 'Отличное': 100, 'Хорошее': 75, 'Удовлетворительное': 50, 'Плохое': 25 };
 
 export default {
+  inject: ['getCurrentUser'],
   data() {
     return {
       entries: [],
       showForm: false,
       growthChartInstance: null,
       healthChartInstance: null,
+      emptyDiaryImg,
       newEntry: { date: "", comment: "", photo: null, weight: null, health: "Отличное", vaccinations: "" },
     };
   },
+  computed: {
+    userId() {
+      const user = this.getCurrentUser();
+      return user ? user.uid : null;
+    },
+  },
   methods: {
-    addEntry() {
-      this.entries.push({ ...this.newEntry, id: Date.now(), weight: parseFloat(this.newEntry.weight) });
+    async addEntry() {
+      const entryData = {
+        date: this.newEntry.date,
+        comment: this.newEntry.comment,
+        weight: parseFloat(this.newEntry.weight),
+        health: this.newEntry.health,
+        vaccinations: this.newEntry.vaccinations,
+      };
+
+      if (this.userId) {
+        const id = await addToUserCollection(this.userId, 'diary', entryData);
+        this.entries.push({ ...entryData, id, photo: this.newEntry.photo });
+      } else {
+        this.entries.push({ ...entryData, id: String(Date.now()), photo: this.newEntry.photo });
+        this.saveToLocalStorage();
+      }
+
       this.entries.sort((a, b) => new Date(a.date) - new Date(b.date));
       this.resetForm();
       this.showForm = false;
-      this.saveEntries();
       this.updateCharts();
     },
-    deleteEntry(id) {
+    async deleteEntry(id) {
+      const entry = this.entries.find(e => e.id === id);
+      if (entry && entry.photo) URL.revokeObjectURL(entry.photo);
       this.entries = this.entries.filter(e => e.id !== id);
-      this.saveEntries();
+
+      if (this.userId) {
+        await deleteFromUserCollection(this.userId, 'diary', id);
+      } else {
+        this.saveToLocalStorage();
+      }
       this.updateCharts();
     },
     resetForm() {
@@ -127,7 +159,10 @@ export default {
     },
     handlePhoto(e) {
       const f = e.target.files[0];
-      if (f) this.newEntry.photo = URL.createObjectURL(f);
+      if (f) {
+        if (this.newEntry.photo) URL.revokeObjectURL(this.newEntry.photo);
+        this.newEntry.photo = URL.createObjectURL(f);
+      }
     },
     healthClass(h) {
       return { 'Отличное': 'good', 'Хорошее': 'ok', 'Удовлетворительное': 'warn', 'Плохое': 'bad' }[h] || 'ok';
@@ -135,12 +170,22 @@ export default {
     healthEmoji(h) {
       return { 'Отличное': '💚', 'Хорошее': '💙', 'Удовлетворительное': '🧡', 'Плохое': '❤️' }[h] || '💙';
     },
-    saveEntries() {
+    saveToLocalStorage() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.entries.map(e => ({ ...e, photo: null }))));
     },
-    loadEntries() {
-      const d = localStorage.getItem(STORAGE_KEY);
-      if (d) try { this.entries = JSON.parse(d); } catch (e) { this.entries = []; }
+    async loadEntries() {
+      if (this.userId) {
+        try {
+          this.entries = await getUserCollection(this.userId, 'diary');
+          this.entries.sort((a, b) => new Date(a.date) - new Date(b.date));
+        } catch (e) {
+          console.error('Ошибка загрузки дневника:', e);
+          this.entries = [];
+        }
+      } else {
+        const d = localStorage.getItem(STORAGE_KEY);
+        if (d) try { this.entries = JSON.parse(d); } catch (e) { this.entries = []; }
+      }
     },
     updateCharts() {
       const labels = this.entries.map(e => e.date);
@@ -165,16 +210,16 @@ export default {
       const weights = this.entries.map(e => e.weight);
       const scores = this.entries.map(e => HEALTH_MAP[e.health] || 50);
 
-      this.growthChartInstance = new Chart(this.$refs.growthChart, {
+      this.growthChartInstance = markRaw(new Chart(this.$refs.growthChart, {
         type: 'line',
         data: {
           labels,
           datasets: [{ label: 'Вес', data: weights, borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.1)', borderWidth: 2, tension: 0.4, fill: true, pointRadius: 4, pointBackgroundColor: '#6366f1' }],
         },
         options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: false } } },
-      });
+      }));
 
-      this.healthChartInstance = new Chart(this.$refs.healthChart, {
+      this.healthChartInstance = markRaw(new Chart(this.$refs.healthChart, {
         type: 'bar',
         data: {
           labels,
@@ -185,10 +230,10 @@ export default {
           ), borderWidth: 2, borderRadius: 6 }],
         },
         options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, max: 100 } } },
-      });
+      }));
     },
   },
-  mounted() { this.loadEntries(); this.createCharts(); },
+  async mounted() { await this.loadEntries(); this.createCharts(); },
   beforeUnmount() {
     if (this.growthChartInstance) this.growthChartInstance.destroy();
     if (this.healthChartInstance) this.healthChartInstance.destroy();
@@ -229,12 +274,19 @@ export default {
 }
 
 .empty-state {
-  text-align: center;
-  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 40px;
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: 16px;
 }
-.empty-icon { font-size: 32px; display: block; margin-bottom: 8px; }
+.empty-img {
+  width: 200px;
+  height: auto;
+  opacity: 0.8;
+}
 
 .entries-grid {
   display: grid;
