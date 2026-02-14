@@ -49,7 +49,7 @@ export default {
         { icon: '💡', title: 'Рекомендации', desc: 'Персонализированные советы по уходу, питанию и тренировкам.' },
         { icon: '📊', title: 'Аналитика', desc: 'Динамика веса и здоровья с помощью наглядных графиков.' },
       ],
-      techs: ['Vue 3', 'Vite', 'Chart.js', 'FullCalendar', 'Vue Router', 'localStorage'],
+      techs: ['Vue 3', 'Vite', 'Firebase', 'Chart.js', 'FullCalendar', 'Vue Router', 'localStorage'],
     };
   },
 };

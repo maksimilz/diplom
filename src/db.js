@@ -55,3 +55,16 @@ export async function deleteFromUserCollection(userId, collectionName, docId) {
     const ref = doc(db, 'users', userId, collectionName, docId);
     await deleteDoc(ref);
 }
+
+/**
+ * Добавить документ в корневую (глобальную) коллекцию
+ */
+export async function addToGlobalCollection(collectionName, data) {
+    const ref = collection(db, collectionName);
+    const docRef = await addDoc(ref, {
+        ...data,
+        createdAt: serverTimestamp()
+    });
+    return docRef.id;
+}
+

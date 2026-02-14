@@ -74,14 +74,13 @@
           <router-link to="/terms">Условия</router-link>
           <router-link to="/contacts">Контакты</router-link>
         </div>
-        <p class="footer-copy">© 2025 Питомец Плюс. Все права защищены.</p>
+        <p class="footer-copy">© {{ new Date().getFullYear() }} Питомец Плюс. Все права защищены.</p>
       </div>
     </footer>
   </div>
 </template>
 
 <script>
-import './assets/styles.css';
 import IconLogo from './components/icons/IconLogo.vue';
 import IconHome from './components/icons/IconHome.vue';
 import IconTasks from './components/icons/IconTasks.vue';

@@ -25,12 +25,17 @@
         </button>
       </div>
 
-      <p v-if="entries.length === 0" class="empty-state">
+      <div v-if="loading" class="loading-state">
+        <div class="spinner"></div>
+        <p>Загрузка записей...</p>
+      </div>
+
+      <div v-else-if="entries.length === 0" class="empty-state">
         <img :src="emptyDiaryImg" alt="Нет записей" class="empty-img" />
         <span>Записей пока нет. Добавьте первую!</span>
-      </p>
+      </div>
 
-      <div class="entries-grid">
+      <div v-else class="entries-grid">
         <div class="entry-card card" v-for="entry in entries" :key="entry.id">
           <img v-if="entry.photo" :src="entry.photo" alt="Фото" class="entry-photo" />
           <div class="entry-date">{{ entry.date }}</div>
@@ -48,6 +53,7 @@
     </section>
 
     <!-- Форма -->
+    <p v-if="errorMessage" class="error-banner">⚠️ {{ errorMessage }}</p>
     <transition name="slide">
       <section v-if="showForm" class="form-section card">
         <h2 class="section-heading">Новая запись</h2>
@@ -97,8 +103,8 @@ import Chart from 'chart.js/auto';
 import { markRaw } from 'vue';
 import emptyDiaryImg from '@/assets/img/empty-diary.svg';
 import { getUserCollection, addToUserCollection, deleteFromUserCollection } from '../db';
+import { STORAGE_KEYS } from '../constants';
 
-const STORAGE_KEY = 'pitomec-diary';
 const HEALTH_MAP = { 'Отличное': 100, 'Хорошее': 75, 'Удовлетворительное': 50, 'Плохое': 25 };
 
 export default {
@@ -110,6 +116,8 @@ export default {
       growthChartInstance: null,
       healthChartInstance: null,
       emptyDiaryImg,
+      errorMessage: "",
+      loading: false,
       newEntry: { date: "", comment: "", photo: null, weight: null, health: "Отличное", vaccinations: "" },
     };
   },
@@ -121,36 +129,47 @@ export default {
   },
   methods: {
     async addEntry() {
+      this.errorMessage = "";
       const entryData = {
         date: this.newEntry.date,
         comment: this.newEntry.comment,
         weight: parseFloat(this.newEntry.weight),
         health: this.newEntry.health,
         vaccinations: this.newEntry.vaccinations,
+        photo: this.newEntry.photo,
       };
 
-      if (this.userId) {
-        const id = await addToUserCollection(this.userId, 'diary', entryData);
-        this.entries.push({ ...entryData, id, photo: this.newEntry.photo });
-      } else {
-        this.entries.push({ ...entryData, id: String(Date.now()), photo: this.newEntry.photo });
-        this.saveToLocalStorage();
-      }
+      try {
+        if (this.userId) {
+          const id = await addToUserCollection(this.userId, 'diary', entryData);
+          this.entries.push({ ...entryData, id });
+        } else {
+          this.entries.push({ ...entryData, id: String(Date.now()) });
+          this.saveToLocalStorage();
+        }
 
-      this.entries.sort((a, b) => new Date(a.date) - new Date(b.date));
-      this.resetForm();
-      this.showForm = false;
-      this.updateCharts();
+        this.entries.sort((a, b) => new Date(a.date) - new Date(b.date));
+        this.resetForm();
+        this.showForm = false;
+        this.updateCharts();
+      } catch (e) {
+        console.error('Ошибка сохранения записи:', e);
+        this.errorMessage = 'Не удалось сохранить запись. Попробуйте позже.';
+      }
     },
     async deleteEntry(id) {
-      const entry = this.entries.find(e => e.id === id);
-      if (entry && entry.photo) URL.revokeObjectURL(entry.photo);
+      this.errorMessage = "";
       this.entries = this.entries.filter(e => e.id !== id);
 
-      if (this.userId) {
-        await deleteFromUserCollection(this.userId, 'diary', id);
-      } else {
-        this.saveToLocalStorage();
+      try {
+        if (this.userId) {
+          await deleteFromUserCollection(this.userId, 'diary', id);
+        } else {
+          this.saveToLocalStorage();
+        }
+      } catch (e) {
+        console.error('Ошибка удаления записи:', e);
+        this.errorMessage = 'Не удалось удалить запись.';
       }
       this.updateCharts();
     },
@@ -159,10 +178,14 @@ export default {
     },
     handlePhoto(e) {
       const f = e.target.files[0];
-      if (f) {
-        if (this.newEntry.photo) URL.revokeObjectURL(this.newEntry.photo);
-        this.newEntry.photo = URL.createObjectURL(f);
+      if (!f) return;
+      if (f.size > 2 * 1024 * 1024) {
+        this.errorMessage = 'Файл слишком большой (макс. 2 МБ)';
+        return;
       }
+      const reader = new FileReader();
+      reader.onload = () => { this.newEntry.photo = reader.result; };
+      reader.readAsDataURL(f);
     },
     healthClass(h) {
       return { 'Отличное': 'good', 'Хорошее': 'ok', 'Удовлетворительное': 'warn', 'Плохое': 'bad' }[h] || 'ok';
@@ -171,9 +194,10 @@ export default {
       return { 'Отличное': '💚', 'Хорошее': '💙', 'Удовлетворительное': '🧡', 'Плохое': '❤️' }[h] || '💙';
     },
     saveToLocalStorage() {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.entries.map(e => ({ ...e, photo: null }))));
+      localStorage.setItem(STORAGE_KEYS.DIARY, JSON.stringify(this.entries));
     },
     async loadEntries() {
+      this.loading = true;
       if (this.userId) {
         try {
           this.entries = await getUserCollection(this.userId, 'diary');
@@ -183,9 +207,10 @@ export default {
           this.entries = [];
         }
       } else {
-        const d = localStorage.getItem(STORAGE_KEY);
+        const d = localStorage.getItem(STORAGE_KEYS.DIARY);
         if (d) try { this.entries = JSON.parse(d); } catch (e) { this.entries = []; }
       }
+      this.loading = false;
     },
     updateCharts() {
       const labels = this.entries.map(e => e.date);
@@ -231,6 +256,12 @@ export default {
         },
         options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, max: 100 } } },
       }));
+    },
+  },
+  watch: {
+    async userId() {
+      await this.loadEntries();
+      this.updateCharts();
     },
   },
   async mounted() { await this.loadEntries(); this.createCharts(); },
@@ -378,22 +409,20 @@ export default {
 .slide-enter-active, .slide-leave-active { transition: all 0.3s ease; }
 .slide-enter-from, .slide-leave-to { opacity: 0; transform: translateY(-10px); }
 
-/* Icon button */
-.btn-icon {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--gray-50);
-  cursor: pointer;
-  font-size: 14px;
-  padding: 0;
-  transition: all 0.2s;
-  box-shadow: none;
+/* Spinner */
+.loading-state {
+    text-align: center;
+    padding: 40px;
+    color: var(--gray-500);
 }
-.btn-icon:hover { background: var(--gray-100); transform: none; }
-.btn-icon-danger:hover { background: var(--danger-light); border-color: var(--danger); }
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid var(--gray-200);
+    border-top: 4px solid var(--primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 16px;
+}
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 </style>

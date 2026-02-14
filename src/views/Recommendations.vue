@@ -17,7 +17,14 @@
     </div>
 
     <!-- Список -->
-    <div class="reco-list">
+    <p v-if="errorMessage" class="error-banner">⚠️ {{ errorMessage }}</p>
+    
+    <div v-if="loading" class="loading-state">
+      <div class="spinner"></div>
+      <p>Загрузка рекомендаций...</p>
+    </div>
+
+    <div v-else class="reco-list">
       <div
         v-for="rec in filteredRecommendations"
         :key="rec.id"
@@ -41,8 +48,7 @@
 
 <script>
 import { getUserCollection, addToUserCollection, updateInUserCollection } from '../db';
-
-const STORAGE_KEY = 'pitomec-recommendations';
+import { STORAGE_KEYS } from '../constants';
 
 const DEFAULT_RECOMMENDATIONS = [
   { title: "Ежедневный уход за шерстью", description: "Расчёсывайте шерсть каждый день для здоровья кожи.", category: "Уход", completed: false },
@@ -56,6 +62,8 @@ export default {
   data() {
     return {
       selectedCategory: "",
+      errorMessage: "",
+      loading: false,
       categories: [
         { value: "", label: "Все", icon: "📋" },
         { value: "Уход", label: "Уход", icon: "🧼" },
@@ -78,23 +86,30 @@ export default {
   },
   methods: {
     async toggleCompleted(id) {
+      this.errorMessage = "";
       const rec = this.recommendations.find(r => r.id === id);
       if (rec) {
         rec.completed = !rec.completed;
-        if (this.userId) {
-          await updateInUserCollection(this.userId, 'recommendations', id, { completed: rec.completed });
-        } else {
-          this.saveToLocalStorage();
+        try {
+          if (this.userId) {
+            await updateInUserCollection(this.userId, 'recommendations', id, { completed: rec.completed });
+          } else {
+            this.saveToLocalStorage();
+          }
+        } catch (e) {
+          console.error('Ошибка обновления рекомендации:', e);
+          this.errorMessage = 'Не удалось обновить. Попробуйте позже.';
+          rec.completed = !rec.completed; // откат
         }
       }
     },
-    saveToLocalStorage() { localStorage.setItem(STORAGE_KEY, JSON.stringify(this.recommendations)); },
+    saveToLocalStorage() { localStorage.setItem(STORAGE_KEYS.RECOMMENDATIONS, JSON.stringify(this.recommendations)); },
     async loadRecommendations() {
+      this.loading = true;
       if (this.userId) {
         try {
           let data = await getUserCollection(this.userId, 'recommendations');
           if (data.length === 0) {
-            // Первый запуск — добавляем рекомендации по умолчанию
             for (const rec of DEFAULT_RECOMMENDATIONS) {
               const id = await addToUserCollection(this.userId, 'recommendations', rec);
               data.push({ ...rec, id });
@@ -106,7 +121,7 @@ export default {
           this.recommendations = DEFAULT_RECOMMENDATIONS.map((r, i) => ({ ...r, id: String(i + 1) }));
         }
       } else {
-        const d = localStorage.getItem(STORAGE_KEY);
+        const d = localStorage.getItem(STORAGE_KEYS.RECOMMENDATIONS);
         if (d) {
           try { this.recommendations = JSON.parse(d); } catch(e) { /* defaults */ }
         }
@@ -114,6 +129,12 @@ export default {
           this.recommendations = DEFAULT_RECOMMENDATIONS.map((r, i) => ({ ...r, id: String(i + 1) }));
         }
       }
+      this.loading = false;
+    },
+  },
+  watch: {
+    userId() {
+      this.loadRecommendations();
     },
   },
   async mounted() { await this.loadRecommendations(); },
@@ -231,4 +252,21 @@ export default {
   background: var(--success);
   border-color: var(--success);
 }
+
+/* Spinner */
+.loading-state {
+    text-align: center;
+    padding: 40px;
+    color: var(--gray-500);
+}
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid var(--gray-200);
+    border-top: 4px solid var(--primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 16px;
+}
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 </style>

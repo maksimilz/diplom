@@ -7,8 +7,14 @@
       <FullCalendar :options="calendarOptions" />
     </section>
 
+    <!-- Загрузка -->
+    <div v-if="loading" class="loading-state">
+      <div class="spinner"></div>
+      <p>Загрузка задач...</p>
+    </div>
+
     <!-- Список задач -->
-    <section class="tasks-section">
+    <section v-else class="tasks-section">
       <h2 class="section-heading">Список задач</h2>
       <p v-if="tasks.length === 0" class="empty-state">
         <span class="empty-icon">📝</span>
@@ -32,7 +38,8 @@
     </section>
 
     <!-- Форма -->
-    <section class="form-section card">
+    <p v-if="errorMessage" class="error-banner">⚠️ {{ errorMessage }}</p>
+    <section v-if="showForm" class="form-section card">
       <h2 class="section-heading">{{ editingId ? '✏️ Редактировать' : '➕ Добавить задачу' }}</h2>
       <form @submit.prevent="addTask" class="task-form">
         <div class="form-group">
@@ -66,8 +73,7 @@
 import FullCalendar from "@fullcalendar/vue3";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import { getUserCollection, addToUserCollection, updateInUserCollection, deleteFromUserCollection } from '../db';
-
-const STORAGE_KEY = 'pitomec-tasks';
+import { STORAGE_KEYS } from '../constants';
 
 export default {
   components: { FullCalendar },
@@ -76,6 +82,8 @@ export default {
     return {
       tasks: [],
       editingId: null,
+      errorMessage: "",
+      loading: false,
       newTask: { title: "", date: "", recurrence: "Нет" },
     };
   },
@@ -97,28 +105,34 @@ export default {
   },
   methods: {
     async addTask() {
+      this.errorMessage = "";
       const taskData = { title: this.newTask.title, date: this.newTask.date, recurrence: this.newTask.recurrence };
 
-      if (this.editingId) {
-        const i = this.tasks.findIndex(t => t.id === this.editingId);
-        if (i !== -1) {
-          this.tasks[i] = { ...taskData, id: this.editingId };
+      try {
+        if (this.editingId) {
+          const i = this.tasks.findIndex(t => t.id === this.editingId);
+          if (i !== -1) {
+            this.tasks[i] = { ...taskData, id: this.editingId };
+            if (this.userId) {
+              await updateInUserCollection(this.userId, 'tasks', this.editingId, taskData);
+            }
+          }
+          this.editingId = null;
+        } else {
           if (this.userId) {
-            await updateInUserCollection(this.userId, 'tasks', this.editingId, taskData);
+            const id = await addToUserCollection(this.userId, 'tasks', taskData);
+            this.tasks.push({ ...taskData, id });
+          } else {
+            this.tasks.push({ ...taskData, id: String(Date.now()) });
           }
         }
-        this.editingId = null;
-      } else {
-        if (this.userId) {
-          const id = await addToUserCollection(this.userId, 'tasks', taskData);
-          this.tasks.push({ ...taskData, id });
-        } else {
-          this.tasks.push({ ...taskData, id: String(Date.now()) });
-        }
-      }
 
-      this.resetForm();
-      if (!this.userId) this.saveToLocalStorage();
+        this.resetForm();
+        if (!this.userId) this.saveToLocalStorage();
+      } catch (e) {
+        console.error('Ошибка сохранения задачи:', e);
+        this.errorMessage = 'Не удалось сохранить задачу. Попробуйте позже.';
+      }
     },
     resetForm() { this.newTask = { title: "", date: "", recurrence: "Нет" }; },
     editTask(id) {
@@ -127,30 +141,84 @@ export default {
     },
     cancelEdit() { this.editingId = null; this.resetForm(); },
     async deleteTask(id) {
+      this.errorMessage = "";
       this.tasks = this.tasks.filter(t => t.id !== id);
-      if (this.userId) {
-        await deleteFromUserCollection(this.userId, 'tasks', id);
-      } else {
-        this.saveToLocalStorage();
+      try {
+        if (this.userId) {
+          await deleteFromUserCollection(this.userId, 'tasks', id);
+        } else {
+          this.saveToLocalStorage();
+        }
+      } catch (e) {
+        console.error('Ошибка удаления задачи:', e);
+        this.errorMessage = 'Не удалось удалить задачу.';
       }
     },
     formatDate(d) {
       if (!d) return '';
       return new Date(d).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     },
-    saveToLocalStorage() { localStorage.setItem(STORAGE_KEY, JSON.stringify(this.tasks)); },
+    saveToLocalStorage() { localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(this.tasks)); },
     async loadTasks() {
+      this.loading = true;
       if (this.userId) {
         try {
           this.tasks = await getUserCollection(this.userId, 'tasks');
+          await this.processRecurrence();
         } catch (e) {
           console.error('Ошибка загрузки задач:', e);
           this.tasks = [];
         }
       } else {
-        const d = localStorage.getItem(STORAGE_KEY);
-        if (d) try { this.tasks = JSON.parse(d); } catch(e) { this.tasks = []; }
+        const d = localStorage.getItem(STORAGE_KEYS.TASKS);
+        if (d) try { this.tasks = JSON.parse(d); await this.processRecurrence(); } catch(e) { this.tasks = []; }
       }
+      this.loading = false;
+    },
+    async processRecurrence() {
+      const now = new Date();
+      const newTasks = [];
+      
+      for (const t of this.tasks) {
+        if (!t.recurrence || t.recurrence === 'Нет') continue;
+        const taskDate = new Date(t.date);
+        if (taskDate < now) {
+            let nextDate = new Date(taskDate);
+            if (t.recurrence === 'Ежедневно') nextDate.setDate(nextDate.getDate() + 1);
+            else if (t.recurrence === 'Еженедельно') nextDate.setDate(nextDate.getDate() + 7);
+            
+            const nextDateStr = nextDate.toISOString().slice(0, 16);
+            const exists = this.tasks.find(ex => ex.title === t.title && ex.date === nextDateStr);
+            
+            if (!exists && nextDate > now) {
+                const newTask = { title: t.title, date: nextDateStr, recurrence: t.recurrence };
+                newTasks.push(newTask);
+            }
+        }
+      }
+
+      if (newTasks.length > 0) {
+        for (const nt of newTasks) {
+            if (this.userId) {
+                const id = await addToUserCollection(this.userId, 'tasks', nt);
+                this.tasks.push({ ...nt, id });
+            } else {
+                this.tasks.push({ ...nt, id: String(Date.now() + Math.random()) });
+            }
+        }
+        if (!this.userId) this.saveToLocalStorage();
+      }
+    },
+    handleDateClick(arg) {
+      if (this.newTask.date && this.newTask.date.startsWith(arg.dateStr)) return;
+      this.newTask.date = arg.dateStr + 'T12:00';
+      this.showForm = true;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+  },
+  watch: {
+    userId() {
+      this.loadTasks();
     },
   },
   async mounted() { await this.loadTasks(); },
@@ -222,73 +290,20 @@ export default {
   font-weight: 500;
 }
 
-.task-actions {
-  display: flex;
-  gap: 6px;
+/* Spinner */
+.loading-state {
+    text-align: center;
+    padding: 40px;
+    color: var(--gray-500);
 }
-
-.btn-icon {
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--gray-50);
-  cursor: pointer;
-  font-size: 16px;
-  padding: 0;
-  transition: all 0.2s;
-  box-shadow: none;
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid var(--gray-200);
+    border-top: 4px solid var(--primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 16px;
 }
-
-.btn-icon:hover {
-  background: var(--gray-100);
-  border-color: var(--gray-300);
-  transform: none;
-}
-
-.btn-icon-danger:hover {
-  background: var(--danger-light);
-  border-color: var(--danger);
-}
-
-/* Form */
-.task-form {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.form-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-
-@media (max-width: 600px) {
-  .form-row { grid-template-columns: 1fr; }
-}
-
-.form-actions {
-  display: flex;
-  gap: 10px;
-}
-
-.btn-secondary {
-  background: var(--gray-100);
-  color: var(--gray-700);
-  border: 1px solid var(--border);
-}
-
-.btn-secondary:hover {
-  background: var(--gray-200);
-}
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 </style>

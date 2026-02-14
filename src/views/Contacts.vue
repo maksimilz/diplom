@@ -10,7 +10,8 @@
             <span class="info-icon">{{ item.icon }}</span>
             <div>
               <strong>{{ item.label }}</strong>
-              <p v-html="item.value"></p>
+              <p v-if="item.href"><a :href="item.href">{{ item.linkText }}</a></p>
+              <p v-else>{{ item.value }}</p>
             </div>
           </div>
         </div>
@@ -31,7 +32,9 @@
             <label for="message">Сообщение</label>
             <textarea id="message" v-model="form.message" rows="5" placeholder="Ваше сообщение..." required></textarea>
           </div>
-          <button type="submit">Отправить сообщение</button>
+          <p v-if="successMessage" class="form-success">{{ successMessage }}</p>
+          <p v-if="errorMessage" class="form-error">{{ errorMessage }}</p>
+          <button type="submit" :disabled="submitting">{{ submitting ? 'Отправка...' : 'Отправить сообщение' }}</button>
         </form>
       </section>
     </div>
@@ -39,22 +42,42 @@
 </template>
 
 <script>
+import { addToGlobalCollection } from '../db';
+
 export default {
   data() {
     return {
       contactItems: [
-        { icon: '📧', label: 'Email', value: '<a href="mailto:support@pitomecplus.ru">support@pitomecplus.ru</a>' },
+        { icon: '📧', label: 'Email', href: 'mailto:support@pitomecplus.ru', linkText: 'support@pitomecplus.ru' },
         { icon: '📞', label: 'Телефон', value: '+7 (800) 123-45-67' },
         { icon: '🕐', label: 'Время работы', value: 'Пн–Пт: 9:00 – 18:00' },
         { icon: '📍', label: 'Адрес', value: 'г. Москва, ул. Примерная, д. 1' },
       ],
       form: { name: "", email: "", message: "" },
+      submitting: false,
+      successMessage: "",
+      errorMessage: "",
     };
   },
   methods: {
-    submitForm() {
-      alert(`Спасибо, ${this.form.name}! Ваше сообщение отправлено.`);
-      this.form = { name: "", email: "", message: "" };
+    async submitForm() {
+      this.submitting = true;
+      this.successMessage = "";
+      this.errorMessage = "";
+      try {
+        await addToGlobalCollection('contacts', {
+          name: this.form.name,
+          email: this.form.email,
+          message: this.form.message,
+        });
+        this.successMessage = `Спасибо, ${this.form.name}! Ваше сообщение отправлено.`;
+        this.form = { name: "", email: "", message: "" };
+      } catch (e) {
+        console.error('Ошибка отправки формы:', e);
+        this.errorMessage = 'Не удалось отправить сообщение. Попробуйте позже.';
+      } finally {
+        this.submitting = false;
+      }
     },
   },
 };
@@ -145,5 +168,23 @@ h2 {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.form-success {
+  color: var(--success);
+  font-size: 14px;
+  text-align: center;
+  padding: 8px 12px;
+  background: var(--success-light);
+  border-radius: var(--radius);
+}
+
+.form-error {
+  color: var(--danger);
+  font-size: 14px;
+  text-align: center;
+  padding: 8px 12px;
+  background: var(--danger-light);
+  border-radius: var(--radius);
 }
 </style>

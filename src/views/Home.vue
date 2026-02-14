@@ -46,8 +46,10 @@
         <p>Подпишитесь на новости и советы по уходу за питомцами</p>
         <form @submit.prevent="subscribe" class="subscribe-form">
           <input type="email" placeholder="Введите ваш email" v-model="email" required />
-          <button type="submit">Подписаться</button>
+          <button type="submit" :disabled="subscribing">{{ subscribing ? '...' : 'Подписаться' }}</button>
         </form>
+        <p v-if="subscribeSuccess" class="subscribe-msg subscribe-success">✓ Спасибо за подписку!</p>
+        <p v-if="subscribeError" class="subscribe-msg subscribe-error">{{ subscribeError }}</p>
       </div>
     </section>
 
@@ -73,12 +75,16 @@ import heroImg from '@/assets/img/hero-illustration.svg';
 import recommendationsImg from '@/assets/img/feature-recommendations.png';
 import taskPlanningImg from '@/assets/img/feature-planning.png';
 import profileMgmtImg from '@/assets/img/feature-profile.png';
+import { addToGlobalCollection } from '../db';
 
 export default {
   data() {
     return {
       heroImg,
       email: "",
+      subscribing: false,
+      subscribeSuccess: false,
+      subscribeError: "",
       features: [
         {
           id: 1,
@@ -117,9 +123,20 @@ export default {
     };
   },
   methods: {
-    subscribe() {
-      alert(`Спасибо за подписку, ${this.email}!`);
-      this.email = "";
+    async subscribe() {
+      this.subscribing = true;
+      this.subscribeSuccess = false;
+      this.subscribeError = "";
+      try {
+        await addToGlobalCollection('subscriptions', { email: this.email });
+        this.subscribeSuccess = true;
+        this.email = "";
+      } catch (e) {
+        console.error('Ошибка подписки:', e);
+        this.subscribeError = 'Не удалось оформить подписку. Попробуйте позже.';
+      } finally {
+        this.subscribing = false;
+      }
     },
   },
 };
@@ -376,6 +393,19 @@ export default {
 .subscribe-form button:hover {
   background: var(--gray-100);
   transform: none;
+}
+
+.subscribe-msg {
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+.subscribe-success {
+  color: #d1fae5;
+}
+
+.subscribe-error {
+  color: #fecaca;
 }
 
 /* Testimonials */
