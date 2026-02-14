@@ -1,269 +1,347 @@
 <template>
-  <div class="pet-diary">
-    <h1>Дневник питомца</h1>
+  <div class="diary-page page-container">
+    <h1 class="page-title">📓 Дневник питомца</h1>
 
     <!-- Графики -->
-    <div class="charts">
-      <h2>Изменения</h2>
-      <div class="chart">
-        <h3>Рост</h3>
-        <canvas id="growthChart"></canvas>
+    <section class="charts-section">
+      <div class="charts-grid">
+        <div class="chart-card card">
+          <h3>📈 Вес (кг)</h3>
+          <canvas ref="growthChart"></canvas>
+        </div>
+        <div class="chart-card card">
+          <h3>❤️ Здоровье</h3>
+          <canvas ref="healthChart"></canvas>
+        </div>
       </div>
-      <div class="chart">
-        <h3>Здоровье</h3>
-        <canvas id="healthChart"></canvas>
+    </section>
+
+    <!-- Записи -->
+    <section class="entries-section">
+      <div class="entries-header">
+        <h2 class="section-heading">Записи</h2>
+        <button @click="showForm = !showForm" class="btn-add">
+          {{ showForm ? 'Скрыть форму' : '+ Добавить запись' }}
+        </button>
       </div>
-    </div>
 
-    <!-- Записи дневника -->
-    <div class="diary-entries">
-      <h2>Записи дневника</h2>
-      <ul>
-        <li v-for="entry in entries" :key="entry.id">
-          <img v-if="entry.photo" :src="entry.photo" alt="Фото записи" />
-          <p><i class="fas fa-calendar-alt"></i> <strong>Дата:</strong> {{ entry.date }}</p>
-          <p><i class="fas fa-comment"></i> <strong>Комментарий:</strong> {{ entry.comment }}</p>
-          <p><i class="fas fa-weight"></i> <strong>Вес:</strong> {{ entry.weight }} кг</p>
-          <p :class="`health-status ${entry.health.toLowerCase()}`">
-            <i class="fas fa-heartbeat"></i> <strong>Состояние здоровья:</strong> {{ entry.health }}
-          </p>
-          <p><i class="fas fa-syringe"></i> <strong>Прививки:</strong> {{ entry.vaccinations }}</p>
-        </li>
-      </ul>
-      <button @click="showForm = true">Добавить запись</button>
-    </div>
+      <p v-if="entries.length === 0" class="empty-state">
+        <span class="empty-icon">📝</span>
+        Записей пока нет. Добавьте первую!
+      </p>
 
-    <!-- Форма добавления записи -->
-    <div v-if="showForm" class="entry-form">
-      <h2>Добавить запись</h2>
-      <form @submit.prevent="addEntry">
-        <label for="date">Дата</label>
-        <input type="date" id="date" v-model="newEntry.date" required />
+      <div class="entries-grid">
+        <div class="entry-card card" v-for="entry in entries" :key="entry.id">
+          <img v-if="entry.photo" :src="entry.photo" alt="Фото" class="entry-photo" />
+          <div class="entry-date">{{ entry.date }}</div>
+          <p class="entry-comment">{{ entry.comment }}</p>
+          <div class="entry-stats">
+            <span class="stat">⚖️ {{ entry.weight }} кг</span>
+            <span class="stat" :class="'health-' + healthClass(entry.health)">
+              {{ healthEmoji(entry.health) }} {{ entry.health }}
+            </span>
+          </div>
+          <p v-if="entry.vaccinations" class="entry-vacc">💉 {{ entry.vaccinations }}</p>
+          <button class="btn-icon btn-icon-danger btn-delete-entry" @click="deleteEntry(entry.id)">🗑</button>
+        </div>
+      </div>
+    </section>
 
-        <label for="comment">Комментарий</label>
-        <textarea id="comment" v-model="newEntry.comment" required></textarea>
-
-        <label for="photo">Фото (по желанию)</label>
-        <input type="file" id="photo" @change="handlePhoto" />
-
-        <label for="weight">Вес (кг)</label>
-        <input type="number" id="weight" v-model="newEntry.weight" min="0" step="0.1" />
-
-        <label for="health">Состояние здоровья</label>
-        <select id="health" v-model="newEntry.health">
-          <option value="Отличное">Отличное</option>
-          <option value="Хорошее">Хорошее</option>
-          <option value="Удовлетворительное">Удовлетворительное</option>
-          <option value="Плохое">Плохое</option>
-        </select>
-
-        <label for="vaccinations">Прививки</label>
-        <textarea id="vaccinations" v-model="newEntry.vaccinations" placeholder="Например: Бешенство, От клещей"></textarea>
-
-        <button type="submit">Сохранить</button>
-      </form>
-    </div>
+    <!-- Форма -->
+    <transition name="slide">
+      <section v-if="showForm" class="form-section card">
+        <h2 class="section-heading">Новая запись</h2>
+        <form @submit.prevent="addEntry" class="diary-form">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="date">Дата</label>
+              <input type="date" id="date" v-model="newEntry.date" required />
+            </div>
+            <div class="form-group">
+              <label for="weight">Вес (кг)</label>
+              <input type="number" id="weight" v-model="newEntry.weight" min="0" step="0.1" required />
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="comment">Комментарий</label>
+            <textarea id="comment" v-model="newEntry.comment" rows="3" required></textarea>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="health">Здоровье</label>
+              <select id="health" v-model="newEntry.health">
+                <option value="Отличное">Отличное</option>
+                <option value="Хорошее">Хорошее</option>
+                <option value="Удовлетворительное">Удовлетворительное</option>
+                <option value="Плохое">Плохое</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="photo">Фото</label>
+              <input type="file" id="photo" accept="image/*" @change="handlePhoto" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="vaccinations">Прививки</label>
+            <textarea id="vaccinations" v-model="newEntry.vaccinations" rows="2" placeholder="Бешенство, От клещей..."></textarea>
+          </div>
+          <button type="submit">Сохранить запись</button>
+        </form>
+      </section>
+    </transition>
   </div>
 </template>
-
 
 <script>
 import Chart from 'chart.js/auto';
 
+const STORAGE_KEY = 'pitomec-diary';
+const HEALTH_MAP = { 'Отличное': 100, 'Хорошее': 75, 'Удовлетворительное': 50, 'Плохое': 25 };
+
 export default {
   data() {
     return {
-      entries: [], // Список записей
-      showForm: false, // Управление отображением формы
-      newEntry: {
-        date: "",
-        comment: "",
-        photo: null,
-        weight: null,
-        health: "Отличное",
-        vaccinations: "",
-      },
+      entries: [],
+      showForm: false,
+      growthChartInstance: null,
+      healthChartInstance: null,
+      newEntry: { date: "", comment: "", photo: null, weight: null, health: "Отличное", vaccinations: "" },
     };
   },
   methods: {
     addEntry() {
-      const newEntry = { ...this.newEntry, id: Date.now() };
-      this.entries.push(newEntry);
+      this.entries.push({ ...this.newEntry, id: Date.now(), weight: parseFloat(this.newEntry.weight) });
+      this.entries.sort((a, b) => new Date(a.date) - new Date(b.date));
       this.resetForm();
       this.showForm = false;
+      this.saveEntries();
+      this.updateCharts();
+    },
+    deleteEntry(id) {
+      this.entries = this.entries.filter(e => e.id !== id);
+      this.saveEntries();
+      this.updateCharts();
     },
     resetForm() {
-      this.newEntry = {
-        date: "",
-        comment: "",
-        photo: null,
-        weight: null,
-        health: "Отличное",
-        vaccinations: "",
-      };
+      this.newEntry = { date: "", comment: "", photo: null, weight: null, health: "Отличное", vaccinations: "" };
     },
-    handlePhoto(event) {
-      const file = event.target.files[0];
-      if (file) {
-        this.newEntry.photo = URL.createObjectURL(file);
+    handlePhoto(e) {
+      const f = e.target.files[0];
+      if (f) this.newEntry.photo = URL.createObjectURL(f);
+    },
+    healthClass(h) {
+      return { 'Отличное': 'good', 'Хорошее': 'ok', 'Удовлетворительное': 'warn', 'Плохое': 'bad' }[h] || 'ok';
+    },
+    healthEmoji(h) {
+      return { 'Отличное': '💚', 'Хорошее': '💙', 'Удовлетворительное': '🧡', 'Плохое': '❤️' }[h] || '💙';
+    },
+    saveEntries() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.entries.map(e => ({ ...e, photo: null }))));
+    },
+    loadEntries() {
+      const d = localStorage.getItem(STORAGE_KEY);
+      if (d) try { this.entries = JSON.parse(d); } catch (e) { this.entries = []; }
+    },
+    updateCharts() {
+      const labels = this.entries.map(e => e.date);
+      const weights = this.entries.map(e => e.weight);
+      const scores = this.entries.map(e => HEALTH_MAP[e.health] || 50);
+      if (this.growthChartInstance) {
+        this.growthChartInstance.data.labels = labels;
+        this.growthChartInstance.data.datasets[0].data = weights;
+        this.growthChartInstance.update();
+      }
+      if (this.healthChartInstance) {
+        this.healthChartInstance.data.labels = labels;
+        this.healthChartInstance.data.datasets[0].data = scores;
+        this.healthChartInstance.data.datasets[0].backgroundColor = scores.map(s =>
+          s >= 75 ? 'rgba(16, 185, 129, 0.3)' : s >= 50 ? 'rgba(245, 158, 11, 0.3)' : 'rgba(239, 68, 68, 0.3)'
+        );
+        this.healthChartInstance.update();
       }
     },
-  },
-  mounted() {
-    // График роста
-    const growthCtx = document.getElementById('growthChart').getContext('2d');
-    new Chart(growthCtx, {
-      type: 'line',
-      data: {
-        labels: ['Янв', 'Фев', 'Март', 'Апр', 'Май'],
-        datasets: [
-          {
-            label: 'Вес',
-            data: [3, 3.5, 4, 4.2, 4.4],
-            backgroundColor: 'rgba(75, 192, 192, 0.2)',
-            borderColor: 'rgba(75, 192, 192, 1)',
-            borderWidth: 2,
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        plugins: {
-          legend: {
-            position: 'top',
-          },
-        },
-      },
-    });
+    createCharts() {
+      const labels = this.entries.map(e => e.date);
+      const weights = this.entries.map(e => e.weight);
+      const scores = this.entries.map(e => HEALTH_MAP[e.health] || 50);
 
-    // График здоровья
-    const healthCtx = document.getElementById('healthChart').getContext('2d');
-    new Chart(healthCtx, {
-      type: 'bar',
-      data: {
-        labels: ['Янв', 'Фев', 'Март', 'Апр', 'Май'],
-        datasets: [
-          {
-            label: 'Состояние здоровья',
-            data: [100, 95, 90, 85, 88],
-            backgroundColor: 'rgba(255, 99, 132, 0.2)',
-            borderColor: 'rgba(255, 99, 132, 1)',
-            borderWidth: 2,
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        scales: {
-          y: {
-            beginAtZero: true,
-            max: 100,
-          },
+      this.growthChartInstance = new Chart(this.$refs.growthChart, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{ label: 'Вес', data: weights, borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.1)', borderWidth: 2, tension: 0.4, fill: true, pointRadius: 4, pointBackgroundColor: '#6366f1' }],
         },
-        plugins: {
-          legend: {
-            position: 'top',
-          },
+        options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: false } } },
+      });
+
+      this.healthChartInstance = new Chart(this.$refs.healthChart, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{ label: 'Здоровье', data: scores, backgroundColor: scores.map(s =>
+            s >= 75 ? 'rgba(16,185,129,0.3)' : s >= 50 ? 'rgba(245,158,11,0.3)' : 'rgba(239,68,68,0.3)'
+          ), borderColor: scores.map(s =>
+            s >= 75 ? '#10b981' : s >= 50 ? '#f59e0b' : '#ef4444'
+          ), borderWidth: 2, borderRadius: 6 }],
         },
-      },
-    });
+        options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, max: 100 } } },
+      });
+    },
+  },
+  mounted() { this.loadEntries(); this.createCharts(); },
+  beforeUnmount() {
+    if (this.growthChartInstance) this.growthChartInstance.destroy();
+    if (this.healthChartInstance) this.healthChartInstance.destroy();
   },
 };
-
 </script>
 
 <style scoped>
-.pet-diary {
-  padding: 20px;
+.charts-section { margin-bottom: 32px; }
+
+.charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
 }
 
-.charts {
+@media (max-width: 768px) { .charts-grid { grid-template-columns: 1fr; } }
+
+.chart-card h3 {
+  font-size: 15px;
+  margin-bottom: 12px;
+  color: var(--gray-700);
+}
+
+/* Entries */
+.entries-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 20px;
 }
 
-.chart {
-  margin-bottom: 15px;
+.section-heading { font-size: 18px; }
+
+.btn-add {
+  font-size: 13px;
+  padding: 8px 16px;
 }
 
-.diary-entries ul {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 20px;
-  list-style: none;
-  padding: 0;
+.empty-state {
+  text-align: center;
+  padding: 32px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+.empty-icon { font-size: 32px; display: block; margin-bottom: 8px; }
+
+.entries-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin-bottom: 32px;
 }
 
-.diary-entries li {
-  background-color: #fff;
-  border-radius: 12px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+.entry-card {
+  position: relative;
   padding: 20px;
-  max-width: 320px;
-  text-align: left;
+}
+
+.entry-photo {
+  width: 100%;
+  height: 160px;
+  object-fit: cover;
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+}
+
+.entry-date {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.entry-comment {
+  font-size: 14px;
+  margin-bottom: 10px;
+  line-height: 1.6;
+}
+
+.entry-stats {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.stat {
+  font-size: 13px;
+  padding: 4px 10px;
+  background: var(--gray-100);
+  border-radius: 12px;
+}
+
+.health-good { background: var(--success-light); color: #059669; }
+.health-ok { background: var(--primary-50); color: var(--primary); }
+.health-warn { background: var(--warning-light); color: #d97706; }
+.health-bad { background: var(--danger-light); color: #dc2626; }
+
+.entry-vacc {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.btn-delete-entry {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+
+/* Form */
+.form-section { margin-top: 0; }
+
+.diary-form {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  line-height: 1.5;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  gap: 16px;
 }
 
-.diary-entries li:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.diary-entries img {
-  max-width: 100%;
-  height: auto;
-  border-radius: 10px;
-  margin-bottom: 15px;
-}
-
-.health-status.отличное {
-  color: green;
-}
-
-.health-status.удовлетворительное {
-  color: orange;
-}
-
-.health-status.плохое {
-  color: red;
-}
-
-.entry-form {
-  margin-top: 20px;
-}
-
-.entry-form form {
+.form-row {
   display: grid;
-  gap: 15px;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
 }
 
-.entry-form form label {
-  font-weight: bold;
-}
+@media (max-width: 600px) { .form-row { grid-template-columns: 1fr; } }
 
-.entry-form form input,
-.entry-form form textarea,
-.entry-form form select {
-  border: 1px solid #d1d1d1;
+/* Transition */
+.slide-enter-active, .slide-leave-active { transition: all 0.3s ease; }
+.slide-enter-from, .slide-leave-to { opacity: 0; transform: translateY(-10px); }
+
+/* Icon button */
+.btn-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 10px;
-  font-size: 16px;
+  background: var(--gray-50);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+  transition: all 0.2s;
+  box-shadow: none;
 }
-
-button {
-  background-color: #4caf50;
-  color: white;
-  font-size: 16px;
-  padding: 10px;
-  border-radius: 8px;
-  transition: background-color 0.3s ease;
-}
-
-button:hover {
-  background-color: #45a049;
-}
+.btn-icon:hover { background: var(--gray-100); transform: none; }
+.btn-icon-danger:hover { background: var(--danger-light); border-color: var(--danger); }
 </style>

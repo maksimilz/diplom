@@ -1,59 +1,40 @@
 <template>
   <div class="auth-page">
-    <div class="auth-container">
-      <h2 v-if="isRegistering">Регистрация</h2>
-      <h2 v-else>Вход</h2>
-      <form @submit.prevent="handleSubmit">
+    <div class="auth-card">
+      <div class="auth-header">
+        <span class="auth-icon">🐾</span>
+        <h2>{{ isRegistering ? "Создать аккаунт" : "Добро пожаловать" }}</h2>
+        <p class="auth-subtitle">{{ isRegistering ? "Зарегистрируйтесь для начала работы" : "Войдите в свой аккаунт" }}</p>
+      </div>
+
+      <form @submit.prevent="handleSubmit" class="auth-form">
         <div v-if="isRegistering" class="form-group">
           <label for="username">Имя пользователя</label>
-          <input
-              id="username"
-              v-model="form.username"
-              type="text"
-              placeholder="Введите имя пользователя"
-              required
-          />
+          <input id="username" v-model="form.username" type="text" placeholder="Введите имя" required />
         </div>
         <div class="form-group">
           <label for="email">Электронная почта</label>
-          <input
-              id="email"
-              v-model="form.email"
-              type="email"
-              placeholder="Введите вашу почту"
-              required
-          />
+          <input id="email" v-model="form.email" type="email" placeholder="you@example.com" required />
         </div>
         <div class="form-group">
           <label for="password">Пароль</label>
-          <input
-              id="password"
-              v-model="form.password"
-              type="password"
-              placeholder="Введите пароль"
-              required
-          />
+          <input id="password" v-model="form.password" type="password" placeholder="••••••••" required />
         </div>
         <div v-if="isRegistering" class="form-group">
           <label for="confirm-password">Подтвердите пароль</label>
-          <input
-              id="confirm-password"
-              v-model="form.confirmPassword"
-              type="password"
-              placeholder="Введите пароль повторно"
-              required
-          />
+          <input id="confirm-password" v-model="form.confirmPassword" type="password" placeholder="••••••••" required />
         </div>
-        <button type="submit" class="btn-primary">
+        <button type="submit" class="btn-auth">
           {{ isRegistering ? "Зарегистрироваться" : "Войти" }}
         </button>
-        <p class="auth-toggle">
-          {{ isRegistering ? "Уже есть аккаунт?" : "Нет аккаунта?" }}
-          <span @click="toggleAuthMode">
-            {{ isRegistering ? "Войти" : "Зарегистрироваться" }}
-          </span>
-        </p>
       </form>
+
+      <p class="auth-toggle">
+        {{ isRegistering ? "Уже есть аккаунт?" : "Нет аккаунта?" }}
+        <span @click="toggleAuthMode" class="toggle-link">
+          {{ isRegistering ? "Войти" : "Зарегистрироваться" }}
+        </span>
+      </p>
     </div>
   </div>
 </template>
@@ -63,18 +44,11 @@ export default {
   data() {
     return {
       isRegistering: true,
-      form: {
-        username: "",
-        email: "",
-        password: "",
-        confirmPassword: "",
-      },
+      form: { username: "", email: "", password: "", confirmPassword: "" },
     };
   },
   methods: {
-    toggleAuthMode() {
-      this.isRegistering = !this.isRegistering;
-    },
+    toggleAuthMode() { this.isRegistering = !this.isRegistering; },
     handleSubmit() {
       if (this.isRegistering && this.form.password !== this.form.confirmPassword) {
         alert("Пароли не совпадают!");
@@ -89,72 +63,78 @@ export default {
 <style scoped>
 .auth-page {
   display: flex;
-  justify-content: center; /* Центровка по горизонтали */
-  align-items: center; /* Центровка по вертикали */
-  height: 100vh; /* Высота экрана */
-  background-color: transparent; /* Убирает фон */
-  margin: 0; /* Убираем отступы */
-  padding: 0; /* Убираем внутренние отступы */
+  justify-content: center;
+  align-items: center;
+  min-height: calc(100vh - 180px);
+  padding: 40px 20px;
 }
 
-.auth-container {
-  background: #fff;
-  padding: 30px;
-  border-radius: 10px;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+.auth-card {
   width: 100%;
-  max-width: 400px;
+  max-width: 420px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 40px 32px;
+  box-shadow: var(--shadow-lg);
 }
 
-h2 {
+.auth-header {
   text-align: center;
-  margin-bottom: 20px;
+  margin-bottom: 28px;
+}
+
+.auth-icon {
+  font-size: 40px;
+  display: block;
+  margin-bottom: 12px;
+}
+
+.auth-header h2 {
+  font-size: 24px;
+  margin-bottom: 4px;
+}
+
+.auth-subtitle {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .form-group {
-  margin-bottom: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.form-group label {
-  display: block;
-  margin-bottom: 5px;
-  font-weight: bold;
-}
-
-.form-group input {
+.btn-auth {
   width: 100%;
-  padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 5px;
-  font-size: 14px;
-}
-
-.btn-primary {
-  width: 100%;
-  padding: 10px;
-  background-color: #1a73e8;
-  color: white;
-  border: none;
-  border-radius: 5px;
-  font-size: 16px;
-  cursor: pointer;
-  margin-top: 10px;
-  transition: background-color 0.3s;
-}
-
-.btn-primary:hover {
-  background-color: #1558b0;
+  padding: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  margin-top: 8px;
 }
 
 .auth-toggle {
   text-align: center;
-  margin-top: 15px;
+  margin-top: 20px;
+  font-size: 14px;
+  color: var(--text-secondary);
 }
 
-.auth-toggle span {
-  color: #1a73e8;
+.toggle-link {
+  color: var(--primary);
   cursor: pointer;
+  font-weight: 500;
+  margin-left: 4px;
+}
+
+.toggle-link:hover {
   text-decoration: underline;
 }
-
 </style>

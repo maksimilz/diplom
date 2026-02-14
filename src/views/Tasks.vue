@@ -1,174 +1,259 @@
 <template>
-  <div class="tasks-page">
-    <h1>Задачи по уходу</h1>
+  <div class="tasks-page page-container">
+    <h1 class="page-title">📋 Задачи по уходу</h1>
 
     <!-- Календарь -->
-    <div class="calendar">
-      <h2>Календарь</h2>
-      <div id="calendar"></div>
-    </div>
+    <section class="calendar-section card">
+      <FullCalendar :options="calendarOptions" />
+    </section>
 
     <!-- Список задач -->
-    <div class="task-list">
-      <h2>Список задач</h2>
-      <ul>
-        <li v-for="task in tasks" :key="task.id">
-          <div class="task-info">
-            <p><strong>Название:</strong> {{ task.title }}</p>
-            <p><strong>Дата и время:</strong> {{ task.date }}</p>
-            <p><strong>Повторяемость:</strong> {{ task.recurrence }}</p>
+    <section class="tasks-section">
+      <h2 class="section-heading">Список задач</h2>
+      <p v-if="tasks.length === 0" class="empty-state">
+        <span class="empty-icon">📝</span>
+        Задач пока нет. Добавьте первую!
+      </p>
+      <div class="tasks-list">
+        <div class="task-card" v-for="task in tasks" :key="task.id">
+          <div class="task-body">
+            <h3 class="task-title">{{ task.title }}</h3>
+            <div class="task-meta">
+              <span class="meta-item">🗓 {{ formatDate(task.date) }}</span>
+              <span class="meta-badge" v-if="task.recurrence !== 'Нет'">🔁 {{ task.recurrence }}</span>
+            </div>
           </div>
           <div class="task-actions">
-            <button @click="editTask(task.id)">Редактировать</button>
-            <button @click="deleteTask(task.id)">Удалить</button>
+            <button class="btn-icon" @click="editTask(task.id)" title="Редактировать">✏️</button>
+            <button class="btn-icon btn-icon-danger" @click="deleteTask(task.id)" title="Удалить">🗑</button>
           </div>
-        </li>
-      </ul>
-    </div>
+        </div>
+      </div>
+    </section>
 
-    <!-- Форма добавления задачи -->
-    <div class="task-form">
-      <h2>Добавить задачу</h2>
-      <form @submit.prevent="addTask">
-        <label for="title">Название задачи:</label>
-        <input id="title" v-model="newTask.title" required />
-
-        <label for="date">Дата и время:</label>
-        <input type="datetime-local" id="date" v-model="newTask.date" required />
-
-        <label for="recurrence">Повторяемость:</label>
-        <select id="recurrence" v-model="newTask.recurrence">
-          <option value="Нет">Нет</option>
-          <option value="Ежедневно">Ежедневно</option>
-          <option value="Еженедельно">Еженедельно</option>
-        </select>
-
-        <button type="submit">Добавить</button>
+    <!-- Форма -->
+    <section class="form-section card">
+      <h2 class="section-heading">{{ editingId ? '✏️ Редактировать' : '➕ Добавить задачу' }}</h2>
+      <form @submit.prevent="addTask" class="task-form">
+        <div class="form-group">
+          <label for="title">Название</label>
+          <input id="title" v-model="newTask.title" placeholder="Например: Прогулка" required />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="date">Дата и время</label>
+            <input type="datetime-local" id="date" v-model="newTask.date" required />
+          </div>
+          <div class="form-group">
+            <label for="recurrence">Повторяемость</label>
+            <select id="recurrence" v-model="newTask.recurrence">
+              <option value="Нет">Нет</option>
+              <option value="Ежедневно">Ежедневно</option>
+              <option value="Еженедельно">Еженедельно</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="submit">{{ editingId ? 'Сохранить' : 'Добавить' }}</button>
+          <button v-if="editingId" type="button" class="btn-secondary" @click="cancelEdit">Отмена</button>
+        </div>
       </form>
-    </div>
+    </section>
   </div>
 </template>
 
 <script>
-import FullCalendar from "@fullcalendar/vue3"; // FullCalendar для календаря
-import dayGridPlugin from "@fullcalendar/daygrid"; // Плагин отображения в виде сетки
+import FullCalendar from "@fullcalendar/vue3";
+import dayGridPlugin from "@fullcalendar/daygrid";
+
+const STORAGE_KEY = 'pitomec-tasks';
 
 export default {
   components: { FullCalendar },
   data() {
     return {
       tasks: [],
-      newTask: {
-        title: "",
-        date: "",
-        recurrence: "Нет",
-      },
-      calendarEvents: [], // События для календаря
+      editingId: null,
+      newTask: { title: "", date: "", recurrence: "Нет" },
     };
+  },
+  computed: {
+    calendarOptions() {
+      return {
+        plugins: [dayGridPlugin],
+        initialView: 'dayGridMonth',
+        locale: 'ru',
+        height: 'auto',
+        headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,dayGridWeek' },
+        events: this.tasks.map(t => ({ id: String(t.id), title: t.title, start: t.date })),
+      };
+    },
   },
   methods: {
     addTask() {
-      const newTask = { ...this.newTask, id: Date.now() };
-      this.tasks.push(newTask);
-
-      // Добавление события в календарь
-      this.calendarEvents.push({
-        title: newTask.title,
-        start: newTask.date,
-      });
-
-      this.resetForm();
-    },
-    resetForm() {
-      this.newTask = {
-        title: "",
-        date: "",
-        recurrence: "Нет",
-      };
-    },
-    editTask(id) {
-      const task = this.tasks.find((t) => t.id === id);
-      if (task) {
-        this.newTask = { ...task };
-        this.tasks = this.tasks.filter((t) => t.id !== id); // Удаляем старую задачу
+      if (this.editingId) {
+        const i = this.tasks.findIndex(t => t.id === this.editingId);
+        if (i !== -1) this.tasks[i] = { ...this.newTask, id: this.editingId };
+        this.editingId = null;
+      } else {
+        this.tasks.push({ ...this.newTask, id: Date.now() });
       }
+      this.resetForm();
+      this.saveTasks();
     },
-    deleteTask(id) {
-      this.tasks = this.tasks.filter((task) => task.id !== id);
-      this.calendarEvents = this.calendarEvents.filter(
-          (event) => event.id !== id
-      );
+    resetForm() { this.newTask = { title: "", date: "", recurrence: "Нет" }; },
+    editTask(id) {
+      const t = this.tasks.find(t => t.id === id);
+      if (t) { this.newTask = { ...t }; this.editingId = id; }
+    },
+    cancelEdit() { this.editingId = null; this.resetForm(); },
+    deleteTask(id) { this.tasks = this.tasks.filter(t => t.id !== id); this.saveTasks(); },
+    formatDate(d) {
+      if (!d) return '';
+      return new Date(d).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    },
+    saveTasks() { localStorage.setItem(STORAGE_KEY, JSON.stringify(this.tasks)); },
+    loadTasks() {
+      const d = localStorage.getItem(STORAGE_KEY);
+      if (d) try { this.tasks = JSON.parse(d); } catch(e) { this.tasks = []; }
     },
   },
+  mounted() { this.loadTasks(); },
 };
 </script>
 
 <style scoped>
-.tasks-page {
-  padding: 20px;
+.calendar-section {
+  margin-bottom: 32px;
 }
 
-.calendar {
-  margin-bottom: 20px;
+.section-heading {
+  font-size: 18px;
+  margin-bottom: 16px;
 }
 
-.task-list ul {
-  list-style: none;
-  padding: 0;
+/* Empty */
+.empty-state {
+  text-align: center;
+  padding: 32px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+.empty-icon { font-size: 32px; display: block; margin-bottom: 8px; }
+
+/* Task cards */
+.tasks-list {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 12px;
+  margin-bottom: 32px;
 }
 
-.task-list li {
-  background: #fff;
-  padding: 15px;
-  border-radius: 10px;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+.task-card {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  transition: all var(--transition);
 }
 
-.task-actions button {
-  margin-left: 10px;
-  padding: 8px 12px;
-  background-color: #1a73e8;
-  color: white;
-  border: none;
-  border-radius: 5px;
+.task-card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary-100);
+}
+
+.task-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.task-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.meta-badge {
+  padding: 2px 8px;
+  background: var(--primary-50);
+  border-radius: 12px;
+  font-size: 12px;
+  color: var(--primary);
+  font-weight: 500;
+}
+
+.task-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-icon {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--gray-50);
   cursor: pointer;
-  transition: background-color 0.3s ease;
+  font-size: 16px;
+  padding: 0;
+  transition: all 0.2s;
+  box-shadow: none;
 }
 
-.task-actions button:hover {
-  background-color: #1558b0;
+.btn-icon:hover {
+  background: var(--gray-100);
+  border-color: var(--gray-300);
+  transform: none;
 }
 
-.task-form form {
+.btn-icon-danger:hover {
+  background: var(--danger-light);
+  border-color: var(--danger);
+}
+
+/* Form */
+.task-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.form-row {
   display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 600px) {
+  .form-row { grid-template-columns: 1fr; }
+}
+
+.form-actions {
+  display: flex;
   gap: 10px;
 }
 
-.task-form form input,
-.task-form form select {
-  padding: 8px;
-  font-size: 16px;
-  border: 1px solid #ccc;
-  border-radius: 5px;
+.btn-secondary {
+  background: var(--gray-100);
+  color: var(--gray-700);
+  border: 1px solid var(--border);
 }
 
-.task-form form button {
-  padding: 10px;
-  font-size: 16px;
-  background-color: #4caf50;
-  color: white;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-}
-
-.task-form form button:hover {
-  background-color: #45a049;
+.btn-secondary:hover {
+  background: var(--gray-200);
 }
 </style>
